@@ -79,6 +79,9 @@ use Modules\FAQS\Models\CourseFaqs;
 
 class ApiController extends Controller
 {
+    protected static array $tableExistsCache = [];
+    protected static array $columnsCache = [];
+
 
     public function blogType()
     {
@@ -2554,7 +2557,10 @@ private function getPlansWithFeatures($planModel, $filterData)
             $table = $model->getTable();
             $returnAll = ['AboutGeography', 'CourseFaqs' , 'CourseSchedule', 'CourseCurriculumFaq', 'CourseSalary', 'FaqsGeneral', 'Testimonial', 'CourseYouTube', 'PlanMapping' , 'CourseTrainer', 'HiringCompanies', 'DynamicCoursePages' , 'Alumni' , ];
 
-            if (!\Illuminate\Support\Facades\Schema::hasTable($table)) {
+            if (!isset(self::$tableExistsCache[$table])) {
+                self::$tableExistsCache[$table] = \Illuminate\Support\Facades\Schema::hasTable($table);
+            }
+            if (!self::$tableExistsCache[$table]) {
                 return in_array($modelName, $returnAll) ? collect([]) : null;
             }
 
@@ -2640,6 +2646,10 @@ private function getPlansWithFeatures($planModel, $filterData)
     public static function getColumns(Model $model)
     {
         $table = $model->getTable();
+        if (isset(self::$columnsCache[$table])) {
+            return self::$columnsCache[$table];
+        }
+
         $except = [
             // 'id',
             'created_by',
@@ -2649,9 +2659,9 @@ private function getPlansWithFeatures($planModel, $filterData)
             'updated_at'
         ];
         $columns = Schema::getColumnListing($table);
-        $columns = array_diff($columns, $except);
+        $columns = array_values(array_diff($columns, $except));
 
-
+        self::$columnsCache[$table] = $columns;
         return $columns;
     }
 
@@ -2701,9 +2711,10 @@ private function getPlansWithFeatures($planModel, $filterData)
             ->where('enroll_end_date', '>=', Carbon::now())
             ->get();
 
+        $feeCurrency = CourseCountry::whereKey($countryId)->value('currency');
         foreach ($schedules as $schedule) {
             $schedule->course_fees *=(float) $multiplier;
-            $schedule->fee_currency = CourseCountry::whereKey($countryId)->value('currency');
+            $schedule->fee_currency = $feeCurrency;
         }
 
         return $schedules;

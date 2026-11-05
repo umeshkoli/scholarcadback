@@ -35,3 +35,8 @@ database/*.sql.gz
  
 *.sql
 
+
+# Database deployment assets exceptions
+!database/scholaracad_schema.sql
+!database/scholaracad_database.zip
+!database/README.md

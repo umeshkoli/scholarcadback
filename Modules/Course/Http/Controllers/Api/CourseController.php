@@ -22,51 +22,79 @@ class CourseController extends Controller
     public function category_and_course(Request $request)
     {
         try {
-
-         $validator = Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), [
                 'country_id' => 'nullable|string',
             ]);
+
+            $country = $request->filled('country_id') ? CourseCountry::where('iso2', $request->country_id)->first() : null;
+            $value_in_dollar = $country?->value_in_dollar ?? 1;
+            $currency = $country?->currency ?? 'USD';
+
+            $plan = Plan::where('name', 'Basic plan')->first();
+            $mapping = $plan ? PlanMapping::where('plan_id', $plan->id)->get()->keyBy('course_id') : collect();
+
+            $ratings = $country
+                ? DynamicCoursePages::select('course_id', 'googleRating', 'facebook', 'installgram', 'enrolled')
+                    ->where('country_id', $country->id)
+                    ->whereNull('state_id')
+                    ->get()
+                    ->keyBy('course_id')
+                : collect();
 
             $all_data = self::model('CourseCategory', 'Course')::whereNull('main_category_id')->where('status', 'Active')->get();
             if ($all_data->isEmpty()) {
                 return $this->errorResponse('No Category Found', 404);
             }
+
+            $allSubcategories = self::model('CourseCategory', 'Course')::whereNotNull('main_category_id')
+                ->where('status', 'Active')
+                ->get()
+                ->groupBy('main_category_id');
+
+            $allCourses = self::model('Course', 'Course')::where('status', 'Active')
+                ->select('id', 'url_title', 'course_short_name', 'course_title', 'banner_bg_color', 'page_title', 'short_description', 'header_image', 'course_category_id', 'is_demand_course')
+                ->get()
+                ->groupBy('course_category_id');
+
             $data = [];
             foreach ($all_data as $cat) {
-                $cat_course = [];
-                $all_subcat_id = self::model('CourseCategory', 'Course')::where('main_category_id', $cat->id)->where('status', 'Active')->pluck('id')->toArray();
-                $all_course = self::model('Course', 'Course')::where('status', 'Active')->whereIn('course_category_id', $all_subcat_id)->get();
-                $country = CourseCountry::where('iso2', $request->country_id)->first();
-                $plan = Plan::where('name', 'Basic plan')->first();
-                $mapping = $plan ? PlanMapping::where('plan_id', $plan->id)->get() : collect();
-                $value_in_dollar = $country?->value_in_dollar ?? 1;
+                $subcatIds = $allSubcategories->has($cat->id)
+                    ? $allSubcategories->get($cat->id)->pluck('id')->toArray()
+                    : [];
 
-                if ($all_course->isNotEmpty()) {
-                    foreach ($all_course as $cour) {
-                        $courseMapping = $mapping->where('course_id', $cour->id)->first();
-                        $courseFee = $courseMapping?->course_fee ?? null;
-                        $totalFee = $value_in_dollar * ($courseFee ?? 0);
-                        $courseRating = $country ? DynamicCoursePages::select('googleRating', 'facebook', 'installgram', 'enrolled')
-                                           ->where('country_id', $country->id)
-                                           ->whereNull('state_id')
-                                           ->where('course_id', $cour->id)
-                                           ->first() : null;
-
-                        $cat_course[] = [
-                            'id' => $cour?->id ?? '',
-                            'url_title' => $cour?->url_title ?? '',
-                            'course_short_name' => $cour?->course_short_name ?? '',
-                            'course_title' => $cour?->course_title ?? '',
-                            'banner_bg_color' => $cour?->banner_bg_color ?? '',
-                            'page_title' => $cour?->page_title ?? '',
-                            'short_description' => $cour?->short_description ?? '',
-                            'header_image' => $cour?->header_image ?? '',
-                            'course_fee' => $totalFee,
-                            'currency' => $country?->currency ?? 'USD',
-                            'ratings' => $courseRating,
-                            'isTranding' => $cour->is_demand_course
-                        ];
+                $catCourses = collect();
+                foreach ($subcatIds as $subId) {
+                    if ($allCourses->has($subId)) {
+                        $catCourses = $catCourses->concat($allCourses->get($subId));
                     }
+                }
+
+                $cat_course = [];
+                foreach ($catCourses as $cour) {
+                    $courseMapping = $mapping->get($cour->id);
+                    $courseFee = $courseMapping?->course_fee ?? null;
+                    $totalFee = $value_in_dollar * ($courseFee ?? 0);
+                    $courseRating = $ratings->get($cour->id);
+
+                    $cat_course[] = [
+                        'id' => $cour?->id ?? '',
+                        'url_title' => $cour?->url_title ?? '',
+                        'course_short_name' => $cour?->course_short_name ?? '',
+                        'course_title' => $cour?->course_title ?? '',
+                        'banner_bg_color' => $cour?->banner_bg_color ?? '',
+                        'page_title' => $cour?->page_title ?? '',
+                        'short_description' => $cour?->short_description ?? '',
+                        'header_image' => $cour?->header_image ?? '',
+                        'course_fee' => $totalFee,
+                        'currency' => $currency,
+                        'ratings' => $courseRating ? [
+                            'googleRating' => $courseRating->googleRating,
+                            'facebook' => $courseRating->facebook,
+                            'installgram' => $courseRating->installgram,
+                            'enrolled' => $courseRating->enrolled,
+                        ] : null,
+                        'isTranding' => $cour->is_demand_course
+                    ];
                 }
                 $data[] = [
                     'id' => $cat?->id ?? '',
@@ -323,7 +351,7 @@ class CourseController extends Controller
             $courses = $query->paginate($limit, ['*'], 'page', $page);
             $country = CourseCountry::where('iso2', $request->country_id)->first();
             $currencyValue = $country?->value_in_dollar ?? 1;
-            $ratings = $country ? DynamicCoursePages::where('country_id', $country->id)->get() : collect();
+            $ratings = $country ? DynamicCoursePages::select('course_id', 'googleRating', 'facebook', 'installgram', 'enrolled')->where('country_id', $country->id)->whereNull('state_id')->get()->keyBy('course_id') : collect();
             if ($courses->isEmpty()) {
                 return $this->errorResponse('No Courses Found', 404);
             }
@@ -331,7 +359,7 @@ class CourseController extends Controller
             $data = $courses->map(function ($dat) use ($currencyValue, $country, $ratings) {
                 $courseFee = $dat->planMappings->first()?->course_fee ?? null;
                 $totalValue = $currencyValue * ($courseFee ?? 0);
-                $rating = $ratings->where('course_id', $dat->id)->first();
+                $rating = $ratings->get($dat->id);
                 return [
                     'id' => $dat?->id ?? '',
                     'is_demand_course' => $dat?->is_demand_course ?? '',

@@ -52,7 +52,7 @@ class ApiRateLimiterServiceProvider extends ServiceProvider
     protected function registerApiRateLimiter(): void
     {
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)
+            return Limit::perMinute(10000)
                 ->by(optional($request->user())->id ?: $request->ip());
         });
     }
