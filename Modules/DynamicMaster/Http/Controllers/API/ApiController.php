@@ -198,9 +198,9 @@ class ApiController extends Controller
 
             $blogId = $request->input('blog_id');
 
-            $blog = KnowledgeCenter::where('url_title', $blogId)->first();
-            $blog->user_views = $blog->user_views + 1;
-            $blog->save();
+            $blog = KnowledgeCenter::where('url_title', $blogId)
+                ->where('status', 'Active')
+                ->first();
 
             if (!$blog) {
                 return response()->json([
@@ -208,6 +208,9 @@ class ApiController extends Controller
                     'message' => 'Blog not found.'
                 ], 404);
             }
+
+            $blog->user_views = $blog->user_views + 1;
+            $blog->save();
 
             return response()->json([
                 'success' => true,
@@ -1501,6 +1504,7 @@ class ApiController extends Controller
             $perPage = $validated['per_page'] ?? 10;
 
             $blogs = KnowledgeCenter::where('resource_title', 'like', '%' . $filter . '%')
+                ->where('status', 'Active')
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
 

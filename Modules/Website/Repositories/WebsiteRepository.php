@@ -137,7 +137,7 @@ class WebsiteRepository extends Controller
             $entry->tableof_content = $tableof_content;
             $entry->meta_description = $request->meta_description;
             $entry->meta_keywords = $request->meta_keywords;
-            $entry->page_title = $request->page_title;
+            $entry->page_title = $request->meta_title;
             $entry->user_views = $request->user_views;
             //$entry->resource_category_id = $request->category_id;
             $entry->company_id = $cmp_and_user[1];
@@ -166,7 +166,6 @@ class WebsiteRepository extends Controller
                 'data' => $entry,
             ];
         } catch (\Exception $e) {
-            dd($e);
             Controller::db()::rollback();
             catch_log($e, "Knowledge Center");
             return [
