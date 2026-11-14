@@ -65,12 +65,12 @@ class DynamicMasterController extends Controller
         $filePath = ltrim(trim($filePath), '/');
 
         if (!empty($filePath)) {
-            // 1. Check local storage (ensure it's not a Git LFS text pointer)
+            // 1. Check local storage (ensure it's not a Git LFS text pointer or placeholder)
             $localFullPath = storage_path("app/public/{$filePath}");
             $isLfsPointer = false;
             if (file_exists($localFullPath) && is_file($localFullPath)) {
                 $head = @file_get_contents($localFullPath, false, null, 0, 40);
-                if ($head && str_starts_with($head, 'version https://git-lfs')) {
+                if ($head && (str_starts_with($head, 'version https://git-lfs') || str_contains($head, '<svg'))) {
                     $isLfsPointer = true;
                 }
             }
@@ -157,7 +157,36 @@ class DynamicMasterController extends Controller
                 ]));
             }
 
-            // 2. Redirect to live media server when file is not stored locally
+            // 2. Try fetching from live media server and cache locally
+            try {
+                $remoteUrl = "https://knowledgeadmin.scholaracad.com/master/secure-documents?path=" . rawurlencode($filePath);
+                $ctx = stream_context_create([
+                    'http' => ['method' => 'GET', 'timeout' => 5, 'follow_location' => 1],
+                    'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+                ]);
+                $remoteContent = @file_get_contents($remoteUrl, false, $ctx);
+                if ($remoteContent !== false && strlen($remoteContent) > 200) {
+                    if (ord($remoteContent[0]) === 10 || ord($remoteContent[0]) === 13) {
+                        $remoteContent = ltrim($remoteContent, "\r\n");
+                    }
+                    @mkdir(dirname($localFullPath), 0777, true);
+                    @file_put_contents($localFullPath, $remoteContent);
+
+                    $ext = strtolower(pathinfo($localFullPath, PATHINFO_EXTENSION));
+                    $mimes = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'svg' => 'image/svg+xml', 'gif' => 'image/gif'];
+                    $mimeType = $mimes[$ext] ?? 'image/png';
+
+                    return response($remoteContent, 200, [
+                        'Access-Control-Allow-Origin' => '*',
+                        'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                        'Content-Type' => $mimeType,
+                        'Content-Length' => strlen($remoteContent),
+                        'Cache-Control' => 'public, max-age=86400',
+                    ]);
+                }
+            } catch (\Throwable $e) {}
+
+            // Redirect to live media server when file is not stored locally
             return redirect()->away("https://knowledgeadmin.scholaracad.com/master/secure-documents?path=" . rawurlencode($filePath));
         }
 

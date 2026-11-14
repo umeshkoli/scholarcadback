@@ -14,87 +14,67 @@ class Course extends Model
 
     protected $appends = ['image', 'image_url'];
 
-    public static function resolveCourseImagePath($courseId, $storedValue = null)
+    public static function resolveCourseImagePath($courseIdOrValue = null, $storedValue = null)
     {
-        $overrides = [
-            14 => '/assets/img/safe.jpg',
-            17 => '/assets/images/new-dynamic-course/ITIL Foundation Version 5.jpg',
-            18 => '/assets/img/itil2.jpg',
-            19 => '/assets/images/itil-ato.svg',
-            33 => '/assets/images/new-dynamic-course/devops-master-certificate.png',
-            40 => '/assets/images/new-dynamic-course/business_analysis_foundation.png',
-            44 => '/assets/img/data-science.jpg',
-        ];
-
-        // 1. Specific course override for courses without unique certificate badges
-        if (!empty($courseId) && isset($overrides[$courseId])) {
-            return $overrides[$courseId];
+        if ($storedValue !== null) {
+            $val = $storedValue;
+        } elseif (is_string($courseIdOrValue) && !is_numeric($courseIdOrValue)) {
+            $val = $courseIdOrValue;
+        } elseif (is_numeric($courseIdOrValue)) {
+            $course = self::find($courseIdOrValue);
+            $val = $course?->getRawOriginal('header_image');
+        } else {
+            $val = null;
         }
 
-        // 2. Check tbl_certificate_image (Source of truth for course images)
-        if (!empty($courseId)) {
-            try {
-                $cert = \Illuminate\Support\Facades\DB::table('tbl_certificate_image')->where('course_id', $courseId)->first();
-                if ($cert && !empty($cert->image_path)) {
-                    $cPath = ltrim(trim($cert->image_path), '/');
-                    if (!str_ends_with(strtolower($cPath), 'certificate.jpg') && file_exists(public_path($cPath))) {
-                        return '/' . $cPath;
-                    }
-                }
-            } catch (\Throwable $e) {
-            }
-        }
-
-        // 3. If stored value exists and is a real, non-placeholder, non-LFS image file
-        if (!empty($storedValue) && is_string($storedValue)) {
-            $clean = ltrim(trim($storedValue), '/');
-            $pPublic = public_path($clean);
-            $pStorage = storage_path('app/public/' . $clean);
-            $checkPath = file_exists($pPublic) ? $pPublic : (file_exists($pStorage) ? $pStorage : null);
-
-            if ($checkPath && is_file($checkPath)) {
-                $head = @file_get_contents($checkPath, false, null, 0, 300);
-                $isLfs = $head && str_starts_with($head, 'version https://git-lfs');
-                $isSvgPlaceholder = $head && (str_contains($head, '<svg') || str_contains($head, 'ScholarAcad Image') || str_contains($head, 'Preview Placeholder'));
-
-                if (!$isLfs && !$isSvgPlaceholder && filesize($checkPath) > 500) {
-                    return '/' . $clean;
-                }
-            }
-        }
-
-        // 4. Default fallback
-        return '/assets/images/new-dynamic-course/scholaracad-banner-img.png';
+        return !empty($val) ? trim($val) : null;
     }
 
-    public static function resolveCourseImageUrl($courseId, $storedValue = null)
+    public static function resolveCourseImageUrl($courseIdOrValue = null, $storedValue = null)
     {
-        $path = self::resolveCourseImagePath($courseId, $storedValue);
-        if (empty($path)) {
-            return '';
-        }
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
         $appUrl = rtrim(config('app.url', 'http://127.0.0.1:8000'), '/');
-        $clean = ltrim($path, '/');
-        return $appUrl . '/' . implode('/', array_map('rawurlencode', explode('/', $clean)));
+        $fallbackUrl = $appUrl . '/assets/img/data-science.jpg';
+
+        if ($storedValue !== null) {
+            $val = $storedValue;
+        } elseif (is_string($courseIdOrValue) && !is_numeric($courseIdOrValue)) {
+            $val = $courseIdOrValue;
+        } elseif (is_numeric($courseIdOrValue)) {
+            $course = self::find($courseIdOrValue);
+            $val = $course?->getRawOriginal('header_image');
+        } else {
+            $val = null;
+        }
+
+        if (empty($val) || !is_string($val)) {
+            return $fallbackUrl;
+        }
+
+        $trimmed = trim($val);
+        if (str_starts_with($trimmed, 'http://') || str_starts_with($trimmed, 'https://') || str_starts_with($trimmed, 'data:')) {
+            return $trimmed;
+        }
+
+        $cleanPath = ltrim($trimmed, '/');
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $cleanPath)));
+
+        return $appUrl . '/' . $encodedPath;
     }
 
     public function getHeaderImageAttribute($value)
     {
-        return self::resolveCourseImagePath($this->id, $value);
+        return !empty($value) ? trim($value) : null;
     }
 
     public function getImageAttribute()
     {
-        return $this->header_image;
+        return $this->header_image ?: 'assets/img/data-science.jpg';
     }
 
     public function getImageUrlAttribute()
     {
         $raw = $this->getRawOriginal('header_image') ?? ($this->attributes['header_image'] ?? null);
-        return self::resolveCourseImageUrl($this->id, $raw);
+        return self::resolveCourseImageUrl($raw);
     }
 
     protected static function boot()
