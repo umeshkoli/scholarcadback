@@ -209,7 +209,7 @@ class ApiController extends Controller
                 ], 404);
             }
 
-            $blog->user_views = $blog->user_views + 1;
+            $blog->user_views = ((int)$blog->user_views) + 1;
             $blog->save();
 
             return response()->json([

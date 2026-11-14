@@ -60,6 +60,7 @@ class ApiMiddleware
             $request->is('api/course/*') ||
             $request->is('course/*') ||
             $request->is('api/list/*') ||
+            $request->is('api/blog-search') ||
             $request->is('api/resource/*') ||
             $request->is('resource/*') ||
             $request->is('api/all-courses') ||

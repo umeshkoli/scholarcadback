@@ -43,3 +43,14 @@ include_once __DIR__.'/test.php';
 require __DIR__ . '/../Modules/LandingPage/Routes/web.php';
 
 
+
+Route::get('/documents/{path}', function (\Illuminate\Http\Request $request, $path) {
+    $request->merge(['path' => 'documents/' . $path]);
+    return app(\Modules\DynamicMaster\Http\Controllers\DynamicMasterController::class)->callAction('secure_file', [$request]);
+})->where('path', '.*');
+
+
+Route::get('/storage/documents/{path}', function (\Illuminate\Http\Request $request, $path) {
+    $request->merge(['path' => 'documents/' . $path]);
+    return app(\Modules\DynamicMaster\Http\Controllers\DynamicMasterController::class)->callAction('secure_file', [$request]);
+})->where('path', '.*');
