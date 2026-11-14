@@ -12,6 +12,91 @@ class Course extends Model
     protected $guarded = [''];
     protected $table = 'tbl_courses';
 
+    protected $appends = ['image', 'image_url'];
+
+    public static function resolveCourseImagePath($courseId, $storedValue = null)
+    {
+        $overrides = [
+            14 => '/assets/img/safe.jpg',
+            17 => '/assets/images/new-dynamic-course/ITIL Foundation Version 5.jpg',
+            18 => '/assets/img/itil2.jpg',
+            19 => '/assets/images/itil-ato.svg',
+            33 => '/assets/images/new-dynamic-course/devops-master-certificate.png',
+            40 => '/assets/images/new-dynamic-course/business_analysis_foundation.png',
+            44 => '/assets/img/data-science.jpg',
+        ];
+
+        // 1. Specific course override for courses without unique certificate badges
+        if (!empty($courseId) && isset($overrides[$courseId])) {
+            return $overrides[$courseId];
+        }
+
+        // 2. Check tbl_certificate_image (Source of truth for course images)
+        if (!empty($courseId)) {
+            try {
+                $cert = \Illuminate\Support\Facades\DB::table('tbl_certificate_image')->where('course_id', $courseId)->first();
+                if ($cert && !empty($cert->image_path)) {
+                    $cPath = ltrim(trim($cert->image_path), '/');
+                    if (!str_ends_with(strtolower($cPath), 'certificate.jpg') && file_exists(public_path($cPath))) {
+                        return '/' . $cPath;
+                    }
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        // 3. If stored value exists and is a real, non-placeholder, non-LFS image file
+        if (!empty($storedValue) && is_string($storedValue)) {
+            $clean = ltrim(trim($storedValue), '/');
+            $pPublic = public_path($clean);
+            $pStorage = storage_path('app/public/' . $clean);
+            $checkPath = file_exists($pPublic) ? $pPublic : (file_exists($pStorage) ? $pStorage : null);
+
+            if ($checkPath && is_file($checkPath)) {
+                $head = @file_get_contents($checkPath, false, null, 0, 300);
+                $isLfs = $head && str_starts_with($head, 'version https://git-lfs');
+                $isSvgPlaceholder = $head && (str_contains($head, '<svg') || str_contains($head, 'ScholarAcad Image') || str_contains($head, 'Preview Placeholder'));
+
+                if (!$isLfs && !$isSvgPlaceholder && filesize($checkPath) > 500) {
+                    return '/' . $clean;
+                }
+            }
+        }
+
+        // 4. Default fallback
+        return '/assets/images/new-dynamic-course/scholaracad-banner-img.png';
+    }
+
+    public static function resolveCourseImageUrl($courseId, $storedValue = null)
+    {
+        $path = self::resolveCourseImagePath($courseId, $storedValue);
+        if (empty($path)) {
+            return '';
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        $appUrl = rtrim(config('app.url', 'http://127.0.0.1:8000'), '/');
+        $clean = ltrim($path, '/');
+        return $appUrl . '/' . implode('/', array_map('rawurlencode', explode('/', $clean)));
+    }
+
+    public function getHeaderImageAttribute($value)
+    {
+        return self::resolveCourseImagePath($this->id, $value);
+    }
+
+    public function getImageAttribute()
+    {
+        return $this->header_image;
+    }
+
+    public function getImageUrlAttribute()
+    {
+        $raw = $this->getRawOriginal('header_image') ?? ($this->attributes['header_image'] ?? null);
+        return self::resolveCourseImageUrl($this->id, $raw);
+    }
+
     protected static function boot()
     {
         parent::boot();

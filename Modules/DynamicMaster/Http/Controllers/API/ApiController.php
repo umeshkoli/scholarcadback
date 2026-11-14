@@ -2288,6 +2288,9 @@ class ApiController extends Controller
 
             $responseData = [
                 'course_id' => $filterData?->course_id,
+                'header_image' => \Modules\Course\Models\Course::resolveCourseImagePath($filterData?->course_id),
+                'image' => \Modules\Course\Models\Course::resolveCourseImagePath($filterData?->course_id),
+                'image_url' => \Modules\Course\Models\Course::resolveCourseImageUrl($filterData?->course_id),
                 'country_name' => $countryName,
                 'city_name' => $cityName,
                 'ratings' => $this->getFilterData(new DynamicCoursePages , $filterData),

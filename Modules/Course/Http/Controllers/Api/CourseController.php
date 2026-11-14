@@ -85,6 +85,8 @@ class CourseController extends Controller
                         'page_title' => $cour?->page_title ?? '',
                         'short_description' => $cour?->short_description ?? '',
                         'header_image' => $cour?->header_image ?? '',
+                        'image' => $cour?->header_image ?? '',
+                        'image_url' => $cour?->image_url ?? '',
                         'course_fee' => $totalFee,
                         'currency' => $currency,
                         'ratings' => $courseRating ? [
@@ -241,6 +243,8 @@ class CourseController extends Controller
                 'short_description' => $dat?->short_description ?? '',
                 'overview' => $dat?->overview ?? '',
                 'header_image' => $dat?->header_image ?? '',
+                'image' => $dat?->header_image ?? '',
+                'image_url' => $dat?->image_url ?? '',
                 'banner_bg_color' => $dat?->banner_bg_color ?? '',
                 'overview1' => $dat?->overview1 ?? '',
                 'training_options' => $dat?->training_options ?? '',
@@ -307,6 +311,8 @@ class CourseController extends Controller
                     'course_category' => $dat?->course_category?->category_name ?? '',
                     'course_sub_category' => $dat?->course_category?->sub_category?->category_name ?? '',
                     'header_image' => $dat?->header_image ?? '',
+                    'image' => $dat?->header_image ?? '',
+                    'image_url' => $dat?->image_url ?? '',
                     'banner_bg_color' => $dat?->banner_bg_color ?? '',
                 ];
             });
@@ -370,6 +376,8 @@ class CourseController extends Controller
                     'course_category' => $dat?->course_category?->category_name ?? '',
                     'course_sub_category' => $dat?->course_category?->sub_category?->category_name ?? '',
                     'header_image' => $dat?->header_image ?? '',
+                    'image' => $dat?->header_image ?? '',
+                    'image_url' => $dat?->image_url ?? '',
                     'banner_bg_color' => $dat?->banner_bg_color ?? '',
                     'course_fee' => $totalValue,
                     'currency' => $country?->currency ?? 'USD',
