@@ -49,8 +49,13 @@ class QuizAttemptController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
 
+            // Public website visitors don't log in: run as a guest attempt keyed by session_id
+            $guestSession = null;
             if (!$user) {
-                return $this->errorResponse('Please login to start the exam simulation.', 401);
+                $guestSession = substr(preg_replace('/[^A-Za-z0-9_-]/', '', (string) $request->header('X-Quiz-Session', '')), 0, 100);
+                if ($guestSession === '') {
+                    $guestSession = \Illuminate\Support\Str::random(40);
+                }
             }
 
             $course = Course::where('url_title', $courseSlug)
@@ -75,7 +80,7 @@ class QuizAttemptController extends Controller
 
             // Check for existing in_progress attempt for this user
             $attempt = CourseQuizAttempt::where('quiz_id', $quiz->id)
-                ->where('user_id', $user->id)
+                ->when($user, fn ($q) => $q->where('user_id', $user->id), fn ($q) => $q->whereNull('user_id')->where('session_id', $guestSession))
                 ->where('status', CourseQuizAttempt::STATUS_IN_PROGRESS)
                 ->latest()
                 ->first();
@@ -92,7 +97,8 @@ class QuizAttemptController extends Controller
 
                 $attempt = CourseQuizAttempt::create([
                     'quiz_id' => $quiz->id,
-                    'user_id' => $user->id,
+                    'user_id' => $user?->id,
+                    'session_id' => $guestSession,
                     'mode' => $mode,
                     'status' => CourseQuizAttempt::STATUS_IN_PROGRESS,
                     'total_questions' => $totalQuestions,
@@ -123,11 +129,12 @@ class QuizAttemptController extends Controller
                     'type' => $quiz->type,
                     'passing_score' => $quiz->passing_score,
                 ],
-                'user' => [
+                'user' => $user ? [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                ],
+                ] : null,
+                'session_id' => $guestSession,
                 'mode' => $attempt->mode,
                 'status' => $attempt->status,
                 'started_at' => $attempt->started_at,
@@ -154,9 +161,6 @@ class QuizAttemptController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
 
-            if (!$user) {
-                return $this->errorResponse('Please login to continue the exam simulation.', 401);
-            }
 
             $validator = Validator::make($request->all(), [
                 'question_id' => 'required|integer|exists:tbl_quiz_questions,id',
@@ -180,7 +184,7 @@ class QuizAttemptController extends Controller
                 return $this->errorResponse('Attempt not found', 404);
             }
 
-            if ($attempt->user_id && $attempt->user_id !== $user->id) {
+            if ($attempt->user_id && (!$user || $attempt->user_id !== $user->id)) {
                 return $this->errorResponse('Unauthorized access to this attempt', 403);
             }
 
@@ -248,9 +252,6 @@ class QuizAttemptController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
 
-            if (!$user) {
-                return $this->errorResponse('Please login to submit the exam simulation.', 401);
-            }
 
             $attempt = CourseQuizAttempt::with(['quiz'])->find($attemptId);
 
@@ -258,7 +259,7 @@ class QuizAttemptController extends Controller
                 return $this->errorResponse('Attempt not found', 404);
             }
 
-            if ($attempt->user_id && $attempt->user_id !== $user->id) {
+            if ($attempt->user_id && (!$user || $attempt->user_id !== $user->id)) {
                 return $this->errorResponse('Unauthorized access to this attempt', 403);
             }
 
@@ -362,9 +363,6 @@ class QuizAttemptController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
 
-            if (!$user) {
-                return $this->errorResponse('Please login to view the exam result.', 401);
-            }
 
             $attempt = CourseQuizAttempt::with(['quiz.course', 'answers'])->find($attemptId);
 
@@ -372,7 +370,7 @@ class QuizAttemptController extends Controller
                 return $this->errorResponse('Attempt not found', 404);
             }
 
-            if ($attempt->user_id && $attempt->user_id !== $user->id) {
+            if ($attempt->user_id && (!$user || $attempt->user_id !== $user->id)) {
                 return $this->errorResponse('Unauthorized access to this result', 403);
             }
 
